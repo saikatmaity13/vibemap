@@ -1,0 +1,45 @@
+# 🌍 VibeMap - The Vibe-First City Explorer
+
+**VibeMap** is a geospatial web application that redefines how we explore cities. Instead of searching by category (e.g., "coffee shop"), users search by **"vibe"** (e.g., "Quiet", "Nature", "Active").
+
+Built with **Python, Flask, and AI**, this project integrates real-time geospatial data with an intelligent chatbot to help users find the perfect spot for their current mood.
+
+🔗 **Live Demo:** [INSERT YOUR RENDER LINK HERE]
+
+![VibeMap Screenshot](https://via.placeholder.com/1000x500?text=App+Screenshot+Placeholder)
+*(Replace this line with a screenshot of your actual app!)*
+
+---
+
+## ✨ Key Features
+
+* **🎭 Vibe-Based Search:** Filter locations by moods like *Quiet, Nature, Active, Foodie,* and *Nightlife*.
+* **🤖 AI Chatbot:** A smart assistant powered by **spaCy NLP** that understands natural language intents (e.g., *"I need coffee"* → Finds cafes; *"I want peace"* → Finds libraries/parks).
+* **🗺️ Interactive Map:** Dynamic **Leaflet.js** map with custom markers, heatmaps, and fly-to animations.
+* **❤️ Save & Bookmark:** Users can create an account to save their favorite spots to a personal wishlist (stored in MongoDB).
+* **🚀 "Show All" Mode:** Efficiently renders 2,000+ data points from the database without browser lag.
+* **📍 Smart "Crawl" Generator:** Auto-generates a route (e.g., "Date Night") connecting a restaurant, a park, and a dessert spot.
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technology | Use Case |
+| :--- | :--- | :--- |
+| **Backend** | Python, Flask | Core application logic & API endpoints. |
+| **Database** | MongoDB Atlas | Cloud NoSQL database for places & users. |
+| **AI / NLP** | spaCy (`en_core_web_sm`) | Intent recognition for the chatbot. |
+| **Frontend** | HTML, CSS, JavaScript | Glassmorphism UI & responsive design. |
+| **Mapping** | Leaflet.js, OpenStreetMap | Interactive map rendering & geocoding. |
+| **Deployment** | Render | Cloud hosting with Gunicorn. |
+
+---
+
+## ⚙️ Installation & Local Setup
+
+Want to run this locally? Follow these steps:
+
+### 1. Clone the Repository
+```bash
+git clone [https://github.com/YOUR_USERNAME/vibemap-portfolio.git](https://github.com/YOUR_USERNAME/vibemap-portfolio.git)
+cd vibemap-portfolio
