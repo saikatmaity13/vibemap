@@ -1,0 +1,10 @@
+flask
+pymongo
+gunicorn
+osmnx
+pandas
+spacy
+python-dotenv
+flask-login
+dnspython
+certifi
