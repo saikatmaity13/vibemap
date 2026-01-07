@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login - VibeMap</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="login-body">
+    <div class="login-card">
+        <div class="login-title">VibeMap</div>
+        <p style="color: #64748b; margin-bottom: 24px;">Discover your city's vibe.</p>
+
+        <form method="POST">
+            <input type="text" name="username" class="login-input" placeholder="Enter your name" required>
+            <button type="submit" class="login-btn">Start Exploring</button>
+        </form>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>VibeMap Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+</head>
+
+<body>
+
+    <div id="map"></div>
+
+    <div class="sidebar">
+        <div class="header">
+            <div class="logo">VibeMap</div>
+            <div class="toolbar">
+                <button class="tool-btn" onclick="app.loadAll()" title="Show Full Database"><i
+                        class="ph-fill ph-globe-hemisphere-west"></i></button>
+                <button class="tool-btn" onclick="app.startCrawl()" title="Vibe Crawl"><i
+                        class="ph-fill ph-path"></i></button>
+                <button class="tool-btn" onclick="app.toggleHeatmap()" title="Heatmap"><i
+                        class="ph-fill ph-fire"></i></button>
+                <button class="tool-btn" onclick="app.getRecommendations()" title="For You"><i
+                        class="ph-fill ph-sparkle"></i></button>
+                <button class="tool-btn" onclick="app.loadSaved()" title="Saved"><i
+                        class="ph-fill ph-heart"></i></button>
+                <a href="{{ url_for('logout') }}" class="tool-btn" title="Logout"><i
+                        class="ph-bold ph-sign-out"></i></a>
+            </div>
+        </div>
+
+        <div class="search-wrapper">
+            <i class="ph-bold ph-magnifying-glass search-icon"></i>
+            <input type="text" class="search-input" id="searchBox"
+                placeholder="Find a vibe (e.g. Jazz Bar, Quiet Cafe)...">
+        </div>
+
+        <div class="filters">
+            <div class="chip" onclick="app.filter('nature')">🍃 Nature</div>
+            <div class="chip" onclick="app.filter('quiet')">🤫 Quiet</div>
+            <div class="chip" onclick="app.filter('active')">💪 Active</div>
+            <div class="chip" onclick="app.filter('foodie')">🍔 Foodie</div>
+            <div class="chip" onclick="app.filter('nightlife')">🎉 Night</div>
+        </div>
+
+        <div id="results">
+            <div style="text-align: center; padding: 40px 20px; color: var(--text-sub);">
+                <i class="ph-duotone ph-map-pin" style="font-size: 3rem; opacity: 0.5;"></i>
+                <p>Start exploring. Your city awaits.</p>
+            </div>
+        </div>
+    </div>
+
+    <button class="chat-fab" onclick="app.toggleChat()">
+        <i class="ph-fill ph-chat-circle-text"></i>
+    </button>
+
+    <div id="chatWindow" class="chat-window">
+        <div class="chat-header">
+            <span>VibeBot 🤖</span>
+            <div onclick="app.toggleChat()" style="cursor:pointer;"><i class="ph-bold ph-x"></i></div>
+        </div>
+        <div id="chatMessages" class="chat-messages">
+            <div class="msg msg-bot">Hi {{ name }}! How can I help you explore today?</div>
+        </div>
+        <div class="chat-grid">
+            <button class="chat-opt" onclick="app.sendChat('I am hungry 🍔')">🍔 Find Food</button>
+            <button class="chat-opt" onclick="app.sendChat('Quiet place 🤫')">🤫 Quiet Spot</button>
+            <button class="chat-opt" onclick="app.sendChat('Party time 🎉')">🎉 Party</button>
+        </div>
+    </div>
+
+    <script>
+        const app = {
+            map: null,
+            markers: [],
+            heatLayer: null,
+            crawlLayer: null,
+            state: {
+                savedIDs: [],
+                userLoc: [12.9716, 77.5946]
+            },
+
+            init() {
+                // Initialize Map
+                this.map = L.map('map', { zoomControl: false }).setView(this.state.userLoc, 13);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(this.map);
+                this.crawlLayer = new L.LayerGroup().addTo(this.map);
+
+                // Get Location
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(pos => {
+                        this.state.userLoc = [pos.coords.latitude, pos.coords.longitude];
+                        this.map.setView(this.state.userLoc, 14);
+                        L.circleMarker(this.state.userLoc, { radius: 8, color: '#6366f1', fillOpacity: 1 }).addTo(this.map);
+                    });
+                }
+
+                this.fetchBookmarks();
+
+                // Search Listener
+                document.getElementById('searchBox').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.search(e.target.value);
+                });
+            },
+
+            async search(query) {
+                this.showLoading();
+                try {
+                    const res = await fetch(`/api/search?q=${query}&lat=${this.state.userLoc[0]}&lon=${this.state.userLoc[1]}`);
+                    const data = await res.json();
+                    this.renderPlaces(data.places || []);
+                } catch (e) { console.error(e); }
+            },
+
+            // --- LOAD ALL DATA (GLOBE BUTTON) ---
+            async loadAll() {
+                this.showLoading();
+                console.log("Fetching full database...");
+                try {
+                    const res = await fetch('/api/all_places');
+                    const data = await res.json();
+
+                    if (data.places.length > 0) {
+                        this.renderPlaces(data.places);
+                        // Zoom to fit all markers
+                        var group = new L.featureGroup(this.markers);
+                        this.map.fitBounds(group.getBounds().pad(0.1));
+                    } else {
+                        document.getElementById('results').innerHTML = `<div style="text-align:center; padding:20px;">Database is empty. Search to add data!</div>`;
+                    }
+                } catch (e) { console.error(e); }
+            },
+
+            filter(vibe) {
+                document.getElementById('searchBox').value = vibe;
+                this.search(vibe);
+            },
+
+            renderPlaces(places) {
+                const container = document.getElementById('results');
+                container.innerHTML = '';
+
+                // Clear old layers
+                this.markers.forEach(m => this.map.removeLayer(m));
+                this.markers = [];
+                this.crawlLayer.clearLayers();
+                if (this.heatLayer) this.map.removeLayer(this.heatLayer);
+
+                if (places.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; padding:20px;">No places found.</div>`;
+                    return;
+                }
+
+                places.forEach((place, index) => {
+                    const marker = L.marker([place.Lat, place.Lon]).addTo(this.map)
+                        .bindPopup(`<b>${place.Name}</b><br>⭐ ${place.Rating}`);
+                    this.markers.push(marker);
+
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.animationDelay = `${index * 0.05}s`;
+
+                    card.onclick = () => {
+                        this.map.flyTo([place.Lat, place.Lon], 17);
+                        marker.openPopup();
+                    };
+
+                    const isSaved = this.state.savedIDs.includes(place.PlaceID);
+
+                    card.innerHTML = `
+                        <div class="card-title">${place.Name}</div>
+                        <div class="card-meta">
+                            <span class="rating">⭐ ${place.Rating}</span>
+                            <span>${place.Type}</span>
+                        </div>
+                        <div style="font-size:0.85rem; color:var(--text-sub)">${place.Address}</div>
+                    `;
+
+                    // Floating Heart Button
+                    const saveBtn = document.createElement('button');
+                    saveBtn.className = `card-save-btn ${isSaved ? 'active' : ''}`;
+                    saveBtn.innerHTML = isSaved ? '<i class="ph-fill ph-heart"></i>' : '<i class="ph-bold ph-heart"></i>';
+
+                    saveBtn.onmousedown = (e) => e.stopPropagation();
+                    saveBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.toggleSave(saveBtn, place);
+                    };
+
+                    card.appendChild(saveBtn);
+                    container.appendChild(card);
+                });
+            },
+
+            async toggleSave(btn, place) {
+                const id = place.PlaceID;
+                const isSaved = this.state.savedIDs.includes(id);
+
+                if (isSaved) {
+                    this.state.savedIDs = this.state.savedIDs.filter(i => i !== id);
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<i class="ph-bold ph-heart"></i>';
+                } else {
+                    this.state.savedIDs.push(id);
+                    btn.classList.add('active');
+                    btn.innerHTML = '<i class="ph-fill ph-heart"></i>';
+                }
+
+                await fetch('/api/bookmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(place)
+                });
+            },
+
+            async startCrawl() {
+                this.showLoading();
+                const res = await fetch('/api/crawl', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'date_night' })
+                });
+                const data = await res.json();
+
+                if (data.path) {
+                    this.renderPlaces(data.path);
+                    const latlngs = data.path.map(p => [p.Lat, p.Lon]);
+                    L.polyline(latlngs, { color: '#8b5cf6', weight: 4, dashArray: '10, 10' }).addTo(this.crawlLayer);
+                    this.map.fitBounds(L.latLngBounds(latlngs).pad(0.2));
+                }
+            },
+
+            async toggleHeatmap() {
+                if (this.heatLayer) {
+                    this.map.removeLayer(this.heatLayer);
+                    this.heatLayer = null;
+                    return;
+                }
+                const vibe = document.getElementById('searchBox').value || 'active';
+                const res = await fetch(`/api/heatmap?vibe=${vibe}`);
+                const points = await res.json();
+                this.heatLayer = L.heatLayer(points, { radius: 25, blur: 15, maxZoom: 17 }).addTo(this.map);
+            },
+
+            async getRecommendations() {
+                this.showLoading();
+                const res = await fetch('/api/recommend');
+                const data = await res.json();
+                this.renderPlaces(data);
+            },
+
+            async loadSaved() {
+                this.showLoading();
+                const res = await fetch('/api/user/bookmarks');
+                const data = await res.json();
+                this.renderPlaces(data);
+            },
+
+            // --- CHATBOT LOGIC ---
+            toggleChat() { document.getElementById('chatWindow').classList.toggle('open'); },
+
+            async sendChat(msg) {
+                const chatBox = document.getElementById('chatMessages');
+
+                // 1. Show User Msg
+                chatBox.innerHTML += `<div class="msg msg-user">${msg}</div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                // 2. Show Loader
+                const loadingID = "loading-" + Date.now();
+                chatBox.innerHTML += `<div id="${loadingID}" class="msg msg-bot" style="opacity:0.7;">...</div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                try {
+                    const res = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: msg })
+                    });
+                    const data = await res.json();
+
+                    // 3. Remove Loader & Show Reply
+                    const loader = document.getElementById(loadingID);
+                    if (loader) loader.remove();
+
+                    chatBox.innerHTML += `<div class="msg msg-bot">${data.reply}</div>`;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+
+                    // 4. Update Map
+                    if (data.places && data.places.length > 0) {
+                        this.renderPlaces(data.places);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    const loader = document.getElementById(loadingID);
+                    if (loader) loader.remove();
+                    chatBox.innerHTML += `<div class="msg msg-bot">⚠️ Connection Error</div>`;
+                }
+            },
+
+            async fetchBookmarks() {
+                const res = await fetch('/api/user/bookmarks');
+                const data = await res.json();
+                this.state.savedIDs = data.map(p => p.PlaceID);
+            },
+
+            showLoading() {
+                document.getElementById('results').innerHTML = `<div style="text-align:center; padding:40px;"><i class="ph-duotone ph-spinner-gap ph-spin" style="font-size:2rem;"></i></div>`;
+            }
+        };
+
+        // --- GLOBAL ACCESS FIX ---
+        window.app = app;
+        window.onload = () => window.app.init();
+    </script>
+</body>
+
+</html>
